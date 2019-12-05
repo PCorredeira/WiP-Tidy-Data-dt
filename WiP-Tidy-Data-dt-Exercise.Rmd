@@ -111,15 +111,116 @@ wip <- fread(here("data", "WB-WiP.csv"),
              check.names = TRUE)
 ```
 
-# Continue from here...
+```{r}
+head(names(wip))
+tail(names(wip))
+names(wip) <- make.names(names(wip))
+head(names(wip))
+tail(names(wip))
+wip[, .N, by=.(V65)]
 
+wip[, c("Indicator.Name", "Indicator.Code",
+"V65"):=NULL]
+setnames(wip, c("Country.Name", "Country.Code"),
+c("Country", "Code"))
+head(names(wip))
+tail(names(wip))
+WP <- melt(wip,
+           id.vars = c("Country" , "Code"),
+           measure = patterns("^X"),
+           variable.name = "YearC",
+           value.name = c("pctWiP"),
+           na.rm = TRUE)
+WP
+```
+```{r}
+WP[, ':='(Year=as.numeric(gsub("[^[:digit:].]",
+                               "", YearC)),
+          Ratio = (100-pctWiP)/pctWiP)][
+            , YearC:=NULL]
+setcolorder(WP, c("Country", "Code", "Year",
+                  "pctWiP", "Ratio"))
+```
 
-
-
-
+```{r}
+WP[Country %in% "Portugal"]
+```
 
 
 ```{r imageEnd, echo=FALSE, out.width="60%"}
 knitr::include_graphics("images/Women_in_Parliament_rect.svg")
+```
+
+```{r}
+library(ggplot2)
+library(magrittr)
+WP[Country %in% "Portugal"] %>%
+ggplot(aes(Year, pctWiP)) +
+geom_line() + geom_point() +
+scale_y_continuous(limits=c(0, 50)) +
+ylab("% Women in Parliament")
+```
+```{r}
+WP[Country %in% c("Portugal", "Sweden", "Spain",
+"Hungary", "Romania", "Finland", "Germany",
+"European Union")] %>%
+ggplot(aes(Year, pctWiP, colour=Country)) +
+geom_line() +
+geom_point() +
+scale_x_continuous(breaks=seq(1990, 2020, 5)) +
+scale_y_continuous(limits=c(0, 50),
+breaks=seq(0, 50, by=10)) +
+ggtitle("Women in Parliament: EU Countries") +
+ylab("% Women in Parliament")
+```
+
+```{r}
+WP[order(-pctWiP), head(.SD, 10)]
+WP[order(Year, -pctWiP), head(.SD, 1), by = Year]
+library(countrycode)
+cl <- as.data.table(codelist)[, .(continent, wb)]
+setnames(cl, c("continent", "wb"),
+c("Continent", "Code"))
+cWP <- cl[WP, on="Code"]
+```
+
+```{r}
+cWP[Year %in% c(1990, 2018) & !is.na(Continent)][
+order(Year, -pctWiP), head(.SD, 1),
+by = .(Year, Continent)][
+order(Continent, Year),
+.(Continent, Year, Country, pctWiP)]
+```
+
+```{r}
+dWP <- cWP[
+order(Country, Year), .SD[c(1,.N)],
+by=Country][,
+pctDiff := pctWiP - shift(pctWiP), by=Country][
+pctDiff<0][
+order(pctDiff)]
+dWP[!is.na(Continent),
+.(Country, pctWiP, pctDiff)]
+```
+
+```{r}
+dclpct <- unique(dWP[!is.na(Continent) &
+pctDiff <= -5]$Country)
+WP[Country %in% dclpct] %>%
+ggplot(aes(Year, pctWiP, colour=Country)) +
+geom_line() +
+geom_point() +
+scale_x_continuous(breaks=seq(1990, 2020, 5)) +
+scale_y_continuous(limits=c(0, 40),
+breaks=seq(0, 40, by=10)) +
+ggtitle("Women in Parliament: Decline >=5%") +
+ylab("% Women in Parliament")
+
+```
+
+```{r}
+cWP[!is.na(Continent),
+    '=' (RankG = rank(-pctWiP), TotalG = .N),
+    by = .(Year)]
 ```
 
